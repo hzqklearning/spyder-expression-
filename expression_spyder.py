@@ -19,13 +19,17 @@ import os
 import json
 from PIL import Image
 import io
+from typing import Dict
 
+#把提取字符串每一行的键值 
+def str_to_dict(s:str)->Dict[str,str]:
+    return {line.split(':')[0].strip():line.split(':')[1].strip() for line in s.split('\n')}
 
-# main_url='https://www.dbbqb.com/'
-# key=input('请输入关键词\n')
+#跳转到指定类型的页面 图片集
 key_url='https://www.dbbqb.com/api/search/json'
+key=input('请输入关键词\n')
 
-headers_str='''Accept: application/json
+headers_str=f'''Accept: application/json
 Accept-Encoding: gzip, deflate, br
 Accept-Language: zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6
 Client-Id: 
@@ -33,7 +37,7 @@ Connection: keep-alive
 Content-Type: application/json
 Cookie: Hm_lvt_7d2469592a25c577fe82de8e71a5ae60=1701095565,1701145073; Hm_lpvt_7d2469592a25c577fe82de8e71a5ae60=1701145117
 Host: www.dbbqb.com
-Referer: https://www.dbbqb.com/s?w=%E7%86%8A%E7%8C%AB
+Referer: https://www.dbbqb.com/s?w={key}
 Sec-Fetch-Dest: empty
 Sec-Fetch-Mode: cors
 Sec-Fetch-Site: same-origin
@@ -42,20 +46,20 @@ Web-Agent: web
 sec-ch-ua: "Microsoft Edge";v="119", "Chromium";v="119", "Not?A_Brand";v="24"
 sec-ch-ua-mobile: ?0
 sec-ch-ua-platform: "Windows"'''
-headers={line.split(':')[0].strip():line.split(':')[1].strip() for line in headers_str.split('\n')}
+headers=str_to_dict(headers_str)
 
-paras_str='''start: 0
-w: %E7%86%8A%E7%8C%AB'''
-paras={line.split(':')[0].strip():line.split(':')[1].strip() for line in paras_str.split('\n')}
+paras_str=f'''start: 0
+w:{key}'''
+paras=str_to_dict(paras_str)
 
-# print(headers)
 resp=requests.get(key_url,headers=headers,params=paras)
 resp_content=json.loads(resp.content.decode(resp.encoding))
 
+#由粗糙的图片地址定位到原图片的地址
 hashid=resp_content[0]['hashId']
 photo_url='https://www.dbbqb.com/api/image/'+hashid
 
-photo_headers_str='''Accept: application/json
+photo_headers_str=f'''Accept: application/json
 Accept-Encoding: gzip, deflate, br
 Accept-Language: zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6
 Client-Id: 
@@ -63,7 +67,7 @@ Connection: keep-alive
 Content-Type: application/json
 Cookie: Hm_lvt_7d2469592a25c577fe82de8e71a5ae60=1701095565,1701145073; Hm_lpvt_7d2469592a25c577fe82de8e71a5ae60=1701157839
 Host: www.dbbqb.com
-Referer: https://www.dbbqb.com/detail/roXWl.html
+Referer: https://www.dbbqb.com/detail/{hashid}.html
 Sec-Fetch-Dest: empty
 Sec-Fetch-Mode: cors
 Sec-Fetch-Site: same-origin
@@ -72,18 +76,19 @@ Web-Agent: web
 sec-ch-ua: "Microsoft Edge";v="119", "Chromium";v="119", "Not?A_Brand";v="24"
 sec-ch-ua-mobile: ?0
 sec-ch-ua-platform: "Windows"'''
-photo_headers={line.split(':')[0].strip():line.split(':')[1].strip() for line in photo_headers_str.split('\n')}
+photo_headers=str_to_dict(photo_headers_str)
+
 photo_resp=requests.get(photo_url,headers=photo_headers)
 photo_resp_content=json.loads(photo_resp.content.decode(photo_resp.encoding))
 
 photo_path=photo_resp_content['path']
+
+#跳转到原图片地址 并得到数据保存下来
 photo_img_url='https://image.dbbqb.com/'+photo_path
-photo_img_resp=requests.get(photo_img_url,photo_headers)
+photo_img_resp=requests.get(photo_img_url)
 photo_img=photo_img_resp.content
 
 img_bytes=io.BytesIO(photo_img)
 image=Image.open(img_bytes)
-image.save('./test.jpg')
+image.save('./test1.jpg')
 
-# print(key_url.encode())
-# print(t)
