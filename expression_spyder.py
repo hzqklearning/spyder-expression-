@@ -1,94 +1,142 @@
+import requests #请求网页
+from typing import Dict,Tuple #类型提示
+from PIL import Image,ImageTk #图片显示和保存
+import io #配合PIL使用
+import tkinter as tk #以便图片显示和交互式保存
+import os  #创建图片保存的文件夹
+import re  #对图片名字进行清洗
+
+def str_to_dict(s:str)->Dict:
+    return {line.split(':',1)[0].strip():line.split(':',1)[1].strip() for line in s.split('\n') if line!=''}
+
+
+#############################################################################################################
+#准备发送请求的参数   主网址是https://www.doutub.com/
+key=input('准备从https://www.doutub.com/ 爬取表情包\n请输入关键词:\n')
+mode=input('请输入模式：1表示批量模式，2表示交互模式\n')
+if mode=='1':
+     images_num=int(input('请输入要爬取的数量\n'))
+print('开始爬取............')
+
+dir_path=f'./表情包/{key}'
+if not os.path.isdir(dir_path):
+    os.makedirs(dir_path)
+
+cur_page=1
+page_size=100
+search_headers_str='''Accept:application/json, text/plain, */*
+Accept-Encoding:gzip, deflate, br
+Accept-Language:zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6
+Origin:https://www.doutub.com
+Referer:https://www.doutub.com/
+Sec-Ch-Ua:"Microsoft Edge";v="119", "Chromium";v="119", "Not?A_Brand";v="24"
+Sec-Ch-Ua-Mobile:?0
+Sec-Ch-Ua-Platform:"Windows"
+Sec-Fetch-Dest:empty
+Sec-Fetch-Mode:cors
+Sec-Fetch-Site:same-site
+User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0
 '''
-变量：
-表情包类型expresstion_type
-要爬取的数量expression_num
-网址url
-放到的文件夹dir_path
-
-
-伪代码：
-循环体（直到数量满足）
-    准备好请求头
-    发出请求
-    对响应头进行解析
-    根据数据方式（批量/选择性）处理数据 （保存/丢弃）
+search_params_str=f'''keyword: {key}
+curPage: {cur_page}
+pageSize: {page_size}
 '''
+search_url='https://api.doutub.com/api/bq/search'
+search_headers=str_to_dict(search_headers_str)
+search_params=str_to_dict(search_params_str)
 
-import requests
-import os
-import json
-from PIL import Image
-import io
-from typing import Dict
+search_resp=requests.get(url=search_url,headers=search_headers,params=search_params)
 
-#把提取字符串每一行的键值 
-def str_to_dict(s:str)->Dict[str,str]:
-    return {line.split(':')[0].strip():line.split(':')[1].strip() for line in s.split('\n')}
+#提取信息
+search_resp_content=search_resp.content
+search_resp_dict=search_resp.json()
+search_resp_data=search_resp_dict['data']
+count=search_resp_data['count'] #图片集的数量
+imgs_name=[img['imgName'] for img in search_resp_data['rows']]
+imgs_path=[img['path'] for img in search_resp_data['rows']] #网址
 
-#跳转到指定类型的页面 图片集
-key_url='https://www.dbbqb.com/api/search/json'
-key=input('请输入关键词\n')
-
-headers_str=f'''Accept: application/json
+##############################################################################################################
+img_headers_str='''
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
 Accept-Encoding: gzip, deflate, br
 Accept-Language: zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6
-Client-Id: 
+Cache-Control: max-age=0
 Connection: keep-alive
-Content-Type: application/json
-Cookie: Hm_lvt_7d2469592a25c577fe82de8e71a5ae60=1701095565,1701145073; Hm_lpvt_7d2469592a25c577fe82de8e71a5ae60=1701145117
-Host: www.dbbqb.com
-Referer: https://www.dbbqb.com/s?w={key}
-Sec-Fetch-Dest: empty
-Sec-Fetch-Mode: cors
-Sec-Fetch-Site: same-origin
+Cookie: Hm_lvt_0e35b200a6045f9dd8f8887cd4626da2=1701179179; Hm_lpvt_0e35b200a6045f9dd8f8887cd4626da2=1701179762
+Host: qn.doutub.com
+If-Modified-Since: Wed, 24 Jul 2019 14:27:31 GMT
+If-None-Match: "FoaI7uga9nS0wUQm0LCqu3fxtNHH"
+Referer: https://www.doutub.com/
+Sec-Fetch-Dest: document
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Site: same-site
+Sec-Fetch-User: ?1
+Upgrade-Insecure-Requests: 1
 User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0
-Web-Agent: web
 sec-ch-ua: "Microsoft Edge";v="119", "Chromium";v="119", "Not?A_Brand";v="24"
 sec-ch-ua-mobile: ?0
 sec-ch-ua-platform: "Windows"'''
-headers=str_to_dict(headers_str)
+img_headers=str_to_dict(img_headers_str)
 
-paras_str=f'''start: 0
-w:{key}'''
-paras=str_to_dict(paras_str)
 
-resp=requests.get(key_url,headers=headers,params=paras)
-resp_content=json.loads(resp.content.decode(resp.encoding))
+def getImage(curr:int)->Tuple[str,str,Image.Image]:
+    img_name=re.sub('[\[\?\]{},.\\\\/;\<\>\+\=\(\)]','',imgs_name[curr])
+    img_url=imgs_path[curr]
+    img_resp=requests.get(url=img_url,headers=img_headers)
+    img_type=img_resp.headers['Content-Type'].split('/')[1].strip() #解析响应对象的类型 very important skill !!!
+    img_bytes=io.BytesIO(img_resp.content)
+    image=Image.open(img_bytes)
+    return img_name,img_type,image
 
-#由粗糙的图片地址定位到原图片的地址
-hashid=resp_content[0]['hashId']
-photo_url='https://www.dbbqb.com/api/image/'+hashid
+def keyboardEventResp(event:tk.Event):
+        global curr,img_name,img_type,image
+        key=event.keysym
+        if key=='s':
+            image.save(dir_path+f'/{img_name}{curr}.{img_type}')
+        elif key=='q':
+            root.destroy()
+            return
 
-photo_headers_str=f'''Accept: application/json
-Accept-Encoding: gzip, deflate, br
-Accept-Language: zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6
-Client-Id: 
-Connection: keep-alive
-Content-Type: application/json
-Cookie: Hm_lvt_7d2469592a25c577fe82de8e71a5ae60=1701095565,1701145073; Hm_lpvt_7d2469592a25c577fe82de8e71a5ae60=1701157839
-Host: www.dbbqb.com
-Referer: https://www.dbbqb.com/detail/{hashid}.html
-Sec-Fetch-Dest: empty
-Sec-Fetch-Mode: cors
-Sec-Fetch-Site: same-origin
-User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0
-Web-Agent: web
-sec-ch-ua: "Microsoft Edge";v="119", "Chromium";v="119", "Not?A_Brand";v="24"
-sec-ch-ua-mobile: ?0
-sec-ch-ua-platform: "Windows"'''
-photo_headers=str_to_dict(photo_headers_str)
+        curr+=1
+        if curr>=count:
+             root.destroy()
+             print('没有更多图片')
+             return
+        try:
+            img_name,img_type,image=getImage(curr)
+            tk_image=ImageTk.PhotoImage(image)
+            tk_image_widget.config(image=tk_image)
+            tk_image_widget.image=tk_image
+        except:
+            print(f'读取该图片失败 {imgs_path[curr]}')
 
-photo_resp=requests.get(photo_url,headers=photo_headers)
-photo_resp_content=json.loads(photo_resp.content.decode(photo_resp.encoding))
+if mode=='1':
+    curr=0;
+    while curr<images_num and curr<count:
+        try:
+            img_name,img_type,image=getImage(curr)
+            image.save(dir_path+f'/{img_name}{curr}.{img_type}')
+            print(f'爬取成功{img_name}{curr}.{img_type}')
+        except:
+            print(f'读取该图片失败 {imgs_path[curr]}')
+        curr+=1
+else:
+    curr=0
+    root=tk.Tk()
+    root.title('表情包')
+    tk_image_widget=tk.Label(root)
+    tk_image_widget.pack()
 
-photo_path=photo_resp_content['path']
+    root.bind('<KeyPress-s>',keyboardEventResp)
+    root.bind('<KeyPress-q>',keyboardEventResp)
+    # root.bind('<Enter>',keyboardEventResp) #鼠标移入控件事件. 注意: 这个事件不是 Enter 键按下事件, Enter 按下事件是 <Return>.
+    root.bind('<Return>',keyboardEventResp)
 
-#跳转到原图片地址 并得到数据保存下来
-photo_img_url='https://image.dbbqb.com/'+photo_path
-photo_img_resp=requests.get(photo_img_url)
-photo_img=photo_img_resp.content
+    img_name,img_type,image=getImage(curr)
+    tk_image=ImageTk.PhotoImage(image)
+    tk_image_widget.config(image=tk_image)
+    tk_image_widget.image=tk_image #tkinter有一个垃圾回收机制，它会自动删除没有被引用的对象，包括图片对象。如果不保存对图片对象的引用，那么当函数结束后，图片对象就会被回收，导致Label组件显示空白。
 
-img_bytes=io.BytesIO(photo_img)
-image=Image.open(img_bytes)
-image.save('./test1.jpg')
+    root.mainloop()
+
 
