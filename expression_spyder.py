@@ -92,7 +92,7 @@ def keyboardEventResp(event:tk.Event):
         global curr,img_name,img_type,image
         key=event.keysym
         if key=='s':
-            image.save(dir_path+f'/{img_name}{curr}.{img_type}')
+            image.save(dir_path+f'/{img_name}{curr}.gif',save_all=True)
         elif key=='q':
             root.destroy()
             return
@@ -115,7 +115,7 @@ if mode=='1':
     while curr<images_num and curr<count:
         try:
             img_name,img_type,image=getImage(curr)
-            image.save(dir_path+f'/{img_name}{curr}.{img_type}')
+            image.save(dir_path+f'/{img_name}{curr}.gif',save_all='True')
             print(f'爬取成功{img_name}{curr}.{img_type}')
         except:
             print(f'读取该图片失败 {imgs_path[curr]}')
